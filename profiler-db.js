@@ -1,23 +1,20 @@
 var DB = require('node-leveldb').DB,
-    uuid = require('node-uuid'),
-    path = '/tmp/testdb.db';
+    uuid = require('node-uuid');
     
-exports.init = function(callback) {
+exports.init = function(config, callback) {
     var start = Date.now(),
+        path = '/tmp/testdb-' + config.count,
         lastKey,
         ii,
-        data = {
-            count: 1000000
-        },
         db;
         
     // destroy the db if it already exists
     DB.destroyDB(path, {});
-    db = exports.open();
+    db = exports.open(config);
     
     
-    console.log('creating ' + data.count + ' random key entries');
-    for (ii = 0; ii < data.count; ii++) {
+    console.log('creating ' + config.count + ' random key entries');
+    for (ii = 0; ii < config.count; ii++) {
         var id = uuid();
 
         db.put({}, new Buffer(id), new Buffer(JSON.stringify({
@@ -27,41 +24,17 @@ exports.init = function(callback) {
         })));
     } // for
     
-    // update the populate data stat
-    data.populate = Date.now() - start;
-    
-    // now iterate the data
-    console.log('benchmarking data iteration');
-
-    // reset the start counter
-    start = Date.now();
-
-    // iterate over the test database
-    var iterator = db.newIterator({});
-
-    for (iterator.seekToFirst(); iterator.valid(); iterator.next()) {
-        var key = iterator.key().toString('utf8');
-
-        if (lastKey && lastKey > key) {
-            console.log('found sorting error');
-        } // if
-
-        lastKey = key;
-    } // for
-    
-    // update the iterate count
-    data.iterate = Date.now() - start;
-  
     // close the db
     db.close();
     
-    if (callback) {
-        callback(data);
-    } // if
+    callback({
+        populate: Date.now() - start
+    });
 };
 
-exports.open = function() {
-    var db = new DB();
+exports.open = function(config) {
+    var db = new DB(),
+        path = '/tmp/testdb-' + config.count;
     
     // open the database
     db.open({
