@@ -17,7 +17,7 @@ exports.init = function(config, callback) {
     for (ii = 0; ii < config.count; ii++) {
         var id = uuid();
 
-        db.put({}, new Buffer(id), new Buffer(JSON.stringify({
+        db.put({}, new Buffer('test::' + id), new Buffer(JSON.stringify({
             id: id,
             name: 'Bob',
             age: 33

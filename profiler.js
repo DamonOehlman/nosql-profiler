@@ -1,16 +1,22 @@
 var config = {
-        count: 5000,
+        count: 1000,
         
         profilers: {
             noop: {},
+            filesystem: {},
             
             couch: {
-                enabled: false,
+                enabled: true,
                 host: 'localhost'
             },
             
             riak: {
+                always: false,
                 host: 'localhost'
+            },
+            
+            redis: {
+                always: false
             }
         }
     },
@@ -34,6 +40,15 @@ function createProfiler() {
             ticks = Date.now();
             
             return value;
+        },
+        
+        parseKey: function(key) {
+            var parts = key.split('::');
+            
+            return {
+                bucket: parts.length > 1 ? parts[0] : 'test',
+                id: parts[parts.length > 1 ? 1 : 0]
+            };
         }
     };
 } // createProfiler
@@ -48,6 +63,7 @@ function runProfiler() {
         
     // if the profiler is disabled, then exit
     if (typeof profilerConf.enabled != 'undefined' && !profilerConf.enabled) {
+        runProfiler();
         return;
     } // if
 
@@ -58,7 +74,7 @@ function runProfiler() {
     // open the profiler db
     profiler.db = profilerDB.open(config);
     
-    if (! profileData[profilerName]) {
+    if (profilerConf.always || (! profileData.profiles[profilerName])) {
         // require the specified profiler and run it
         console.log('running ' + profilerName + ' profiler');
         
@@ -78,6 +94,7 @@ function runProfiler() {
     }
     else {
         console.log('profile for ' + profilerName + ' already generated');
+        runProfiler();
     } // if..else
 } // runTests
 

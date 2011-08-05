@@ -1,3 +1,5 @@
+var client = require('redis').createClient();
+
 exports.run = function(profiler, config, callback) {
     // open an connection to the local couchdb
     var db = require('riak-js').getClient({
@@ -11,29 +13,9 @@ exports.run = function(profiler, config, callback) {
         var counter = 0,
             removeTimeout = 0;
 
-        console.log('riak: cleaning up');
-        db.buckets(function(err, bucketData) {
-            if (err) {
-                callback();
-                return;
-            } // if
-            
-            bucketData.buckets.forEach(function(bucket) {
-                console.log('riak: emptying bucket - ' + bucket);
-                
-                db.getAll(bucket, function(err, items) {
-                    for (var ii = 0; (! err) && ii < items.length; ii++) {
-                        db.remove(bucket, items[ii].meta.key);
-                    } // for
-                    
-                    clearTimeout(removeTimeout);
-                    removeTimeout = setTimeout(function() {
-                        data.cleaned = profiler.elapsed();
-                        callback(data);
-                    }, 100);
-                });
-            });
-        });
+        console.log('redis: cleaning up');
+        client.quit();
+        callback(data);
     } // cleanup        
         
     function readNext() {
@@ -46,7 +28,7 @@ exports.run = function(profiler, config, callback) {
 
         var key = profiler.parseKey(iterator.key().toString());
         
-        db.get(key.bucket, key.id, function(err, itemData, meta) {
+        client.hgetall(key.bucket + '::' + key.id, function(err, itemData) {
             if (err) {
                 data.readErrors = (data.readErrors || 0) + 1;
             } // if
@@ -61,7 +43,7 @@ exports.run = function(profiler, config, callback) {
             data.puts = profiler.elapsed();
 
             // now read
-            console.log('riak: testing reads');
+            console.log('redis: testing reads');
             iterator.seekToFirst();
             readNext();
             
@@ -70,11 +52,10 @@ exports.run = function(profiler, config, callback) {
 
         var key = profiler.parseKey(iterator.key().toString());
         
-        db.save(
-            key.bucket, 
-            key.id, 
+        client.hmset(
+            key.bucket + '::' + key.id,
             JSON.parse(iterator.value().toString()), 
-            function(err, res) {
+            function(err) {
                 if (err) {
                     data.writeErrors = (data.writeErrors || 0) + 1;
                 } // if
@@ -85,7 +66,7 @@ exports.run = function(profiler, config, callback) {
         );
     } // writeNext
     
-    console.log('riak: testing writes');
+    console.log('redis: testing writes');
     iterator.seekToFirst();
     writeNext();
 };
