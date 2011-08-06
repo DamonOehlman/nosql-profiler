@@ -9,20 +9,21 @@ exports.run = function(profiler, config, callback) {
         iterator = profiler.db.newIterator({});
         data = {};
         
-    function cleanup() {
+    function cleanup(cleanupCallback) {
         var counter = 0,
             removeTimeout = 0;
 
         console.log('redis: cleaning up');
-        client.quit();
-        callback(data);
+        cleanupCallback();
     } // cleanup        
         
     function readNext() {
         if (! iterator.valid()) {
             data.gets = profiler.elapsed();
 
-            cleanup();
+            client.quit();
+            callback(data);
+
             return;
         } // if
 
@@ -66,7 +67,9 @@ exports.run = function(profiler, config, callback) {
         );
     } // writeNext
     
-    console.log('redis: testing writes');
-    iterator.seekToFirst();
-    writeNext();
+    cleanup(function() {
+        console.log('redis: testing writes');
+        iterator.seekToFirst();
+        writeNext();
+    });
 };

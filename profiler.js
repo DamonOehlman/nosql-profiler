@@ -1,9 +1,16 @@
-var config = {
-        count: 1000,
+var path = require('path'),
+    fs = require('fs'),
+    _ = require('underscore'),
+    profilerDB = require('./profiler-db'),
+    config = {
+        files: '/development/data/nosql-test',
+        count: undefined, // 500,
         
         profilers: {
             noop: {},
-            filesystem: {},
+            filesystem: {
+                enabled: false
+            },
             
             couch: {
                 enabled: true,
@@ -11,19 +18,21 @@ var config = {
             },
             
             riak: {
-                always: false,
+                enabled: true,
                 host: 'localhost'
             },
             
             redis: {
-                always: false
+                enabled: true
+            },
+            
+            mongo: {
+                enabled: false,
+                host: 'localhost'
             }
         }
     },
-    fs = require('fs'),
-    _ = require('underscore'),
-    datafile = 'data/' + config.count + '.json',
-    profilerDB = require('./profiler-db'),
+    datafile = 'data/' + (config.files ? path.basename(config.files) : config.count || 500) + '.json',
     profileData = {
         profiles: {}
     },
@@ -98,21 +107,13 @@ function runProfiler() {
     } // if..else
 } // runTests
 
-fs.readFile(datafile, 'utf8', function(err, data) {
-    if (err) {
-        profilerDB.init(config, function() {
-            // write the profile data
-            fs.writeFile(datafile, JSON.stringify(profileData));
-            
-            // run the tests
-            runProfiler();
-        });
-    }
-    else {
-        // parse the profile data
-        profileData = JSON.parse(data);
+profilerDB.init(config, function() {
+    fs.readFile(datafile, 'utf8', function(err, data) {
+        if (! err) {
+            profileData = JSON.parse(data);
+        } // if
         
         // run the tests
         runProfiler();
-    } // if..else
+    });
 });

@@ -51,11 +51,9 @@ exports.run = function(profiler, config, callback) {
             return;
         } // if
         
-        var key = profiler.parseKey(iterator.key().toString());
-        
-        getDB(conn, key.bucket, function(db) {
+        getDB(conn, 'test', function(db) {
             // save the data
-            db.get(key.id, function(err, doc) {
+            db.get(iterator.key().toString(), function(err, doc) {
                 if (err) {
                     data.readErrors = (data.readErrors || 0) + 1;
                 } // if
@@ -79,12 +77,10 @@ exports.run = function(profiler, config, callback) {
             return;
         } // if
         
-        var key = profiler.parseKey(iterator.key().toString());
-        
-        getDB(conn, key.bucket, function(db) {
+        getDB(conn, 'test', function(db) {
             // save the data
             db.save(
-                key.id,
+                iterator.key().toString(),
                 JSON.parse(iterator.value().toString()), 
                 function(err, res) {
                     if (err) {

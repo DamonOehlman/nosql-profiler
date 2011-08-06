@@ -1,45 +1,110 @@
-var DB = require('node-leveldb').DB,
-    uuid = require('node-uuid');
+var path = require('path'),
+    fs = require('fs'),
+    uuid = require('node-uuid'),
+    _ = require('underscore'),
+    reInvalidFile = /^\./;
     
-exports.init = function(config, callback) {
-    var start = Date.now(),
-        path = '/tmp/testdb-' + config.count,
-        lastKey,
-        ii,
-        db;
+var db = (function() {
+    var data = {};
+    
+    function Iterator() {
+        var keys = _.keys(data),
+            keyIdx = 0;
         
-    // destroy the db if it already exists
-    DB.destroyDB(path, {});
-    db = exports.open(config);
+        return {
+            key: function() {
+                return new Buffer(keys[keyIdx]);
+            },
+            
+            value: function() {
+                return new Buffer(data[keys[keyIdx]]);
+            },
+            
+            seekToFirst: function() {
+                keyIdx = 0;
+            },
+            
+            valid: function() {
+                return keyIdx >= 0 && keyIdx < keys.length;
+            },
+            
+            next: function() {
+                keyIdx++;
+            }
+        };
+    } // Iterator
     
+    return {
+        close: function() {
+        },
+        
+        newIterator: function() {
+            return new Iterator();
+        },
+        
+        get: function(key) {
+            return data[key];
+        },
+        
+        put: function(key, obj) {
+            data[key] = obj;
+        }
+    };
+})();
     
+function generateDocs(config, callback) {
     console.log('creating ' + config.count + ' random key entries');
     for (ii = 0; ii < config.count; ii++) {
         var id = uuid();
 
-        db.put({}, new Buffer('test::' + id), new Buffer(JSON.stringify({
+        db.put('test::' + id, JSON.stringify({
             id: id,
             name: 'Bob',
             age: 33
-        })));
+        }));
     } // for
     
-    // close the db
-    db.close();
+    callback();
+} // generateDocs
+
+function loadFiles(config, callback) {
+    var files = fs.readdirSync(config.files);
     
-    callback({
-        populate: Date.now() - start
+    files.forEach(function(bucket) {
+        if (reInvalidFile.test(bucket)) {
+            return;
+        } // if
+        
+        var dataFiles = fs.readdirSync(path.join(config.files, bucket));
+
+        console.log('loading ' + dataFiles.length + ' files for bucket: ' + bucket);
+        dataFiles.forEach(function(filename) {
+            if (reInvalidFile.test(filename)) {
+                return;
+            } // if
+
+            var content = fs.readFileSync(path.join(config.files, bucket, filename), 'utf8');
+            
+            db.put(bucket + '::' + path.basename(filename, '.json'), content);
+        });
+    });
+
+    callback();
+} // loadFiles
+    
+exports.init = function(config, callback) {
+    var start = Date.now(),
+        dbPath = '/tmp/testdb-' + (config.files ? path.basename(config.files) : config.count || 500),
+        lastKey,
+        ii;
+        
+    (config.files ? loadFiles : generateDocs)(config, function() {
+        callback({
+            populate: Date.now() - start
+        });
     });
 };
 
 exports.open = function(config) {
-    var db = new DB(),
-        path = '/tmp/testdb-' + config.count;
-    
-    // open the database
-    db.open({
-        create_if_missing: true
-    }, path);
-    
     return db;
 }; // open

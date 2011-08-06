@@ -7,40 +7,51 @@ exports.run = function(profiler, config, callback) {
         iterator = profiler.db.newIterator({});
         data = {};
         
-    function cleanup() {
+    function cleanup(cleanupCallback) {
         var counter = 0,
-            removeTimeout = 0;
-
-        console.log('riak: cleaning up');
-        db.buckets(function(err, bucketData) {
-            if (err) {
-                callback();
-                return;
-            } // if
+            removeTimeout = 0,
+            buckets = [],
+            bucketIdx = 0;
             
-            bucketData.buckets.forEach(function(bucket) {
-                console.log('riak: emptying bucket - ' + bucket);
-                
-                db.getAll(bucket, function(err, items) {
+        function emptyNextBucket() {
+            var bucket = buckets[bucketIdx++];
+            
+            console.log('riak: emptying bucket - ' + bucket);
+            db.getAll(bucket, function(err, items) {
+                if (! err) {
+                    console.log('riak: removing ' + items.length + ' items');
+
                     for (var ii = 0; (! err) && ii < items.length; ii++) {
                         db.remove(bucket, items[ii].meta.key);
                     } // for
-                    
-                    clearTimeout(removeTimeout);
-                    removeTimeout = setTimeout(function() {
-                        data.cleaned = profiler.elapsed();
-                        callback(data);
-                    }, 100);
-                });
+                } // if
+                
+                if (bucketIdx < buckets.length) {
+                    emptyNextBucket();
+                }
+                else {
+                    data.cleaned = profiler.elapsed();
+                    cleanupCallback();
+                } // if..else
             });
+        } // emptyNextBucket
+
+        console.log('riak: cleaning up');
+        db.buckets(function(err, bucketData) {
+            if (err || bucketData.buckets.length === 0) {
+                cleanupCallback();
+                return;
+            } // if
+            
+            buckets = bucketData.buckets;
+            emptyNextBucket();
         });
     } // cleanup        
         
     function readNext() {
         if (! iterator.valid()) {
             data.gets = profiler.elapsed();
-
-            cleanup();
+            callback(data);
             return;
         } // if
 
@@ -85,7 +96,9 @@ exports.run = function(profiler, config, callback) {
         );
     } // writeNext
     
-    console.log('riak: testing writes');
-    iterator.seekToFirst();
-    writeNext();
+    cleanup(function() {
+        console.log('riak: testing writes');
+        iterator.seekToFirst();
+        writeNext();
+    });
 };
