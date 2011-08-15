@@ -1,46 +1,12 @@
-var cradle = require('cradle'),
-    dbs = {};
-
-function getDB(conn, dbname, callback) {
-    if (dbs[dbname]) {
-        callback(dbs[dbname]);
-    }
-    else {
-        var db = dbs[dbname] = conn.database(dbname);
-        
-        // if the database exists, then drop it and rebuild
-        db.exists(function(err, exists) {
-            if (! err) {
-                // if the database exists, then destroy it
-                if (exists) {
-                    db.destroy(function() {
-                        db.create();
-                        callback(db);
-                    });
-                }
-                else {
-                    db.create();
-                    callback(db);
-                } // if..else        
-            }
-            else {
-                console.log('error opening couch db: ' + dbname);
-                process.exit();
-            } // if..else
-        });
-        
-    }
-} // makeDB
-
 exports.run = function(profiler, config, callback) {
     // open an connection to the local couchdb
-    var conn = new cradle.Connection(
-            config.host || 'localhost',
-            config.port || 5984,
-            { cache: false }
-        ),
-        db = conn.database('test'),
-        iterator = profiler.db.newIterator({});
+    var couch = require('PJsonCouch')({
+            protocol: 'http',
+            host: config.host || 'localhost',
+            port: config.port || 5984,
+            path: config.path || ''
+        }),
+        iterator = profiler.db.newIterator({}),
         data = {};
         
     function readNext() {
@@ -51,18 +17,14 @@ exports.run = function(profiler, config, callback) {
             return;
         } // if
         
-        getDB(conn, 'test', function(db) {
-            // save the data
-            db.get(iterator.key().toString(), function(err, doc) {
-                if (err) {
-                    data.readErrors = (data.readErrors || 0) + 1;
-                } // if
-                
-
-                iterator.next();
-                readNext();
-            });
-        });        
+        couch.getDoc({ id: iterator.key().toString() }, function(res) {
+            if (res.error) {
+                data.writeErrors = (data.writeErrors || 0) + 1;
+            } // if
+            
+            iterator.next();
+            readNext();
+        });
     } // read
         
     function writeNext() {
@@ -77,25 +39,38 @@ exports.run = function(profiler, config, callback) {
             return;
         } // if
         
-        getDB(conn, 'test', function(db) {
-            // save the data
-            db.save(
-                iterator.key().toString(),
-                JSON.parse(iterator.value().toString()), 
-                function(err, res) {
-                    if (err) {
-                        data.writeErrors = (data.writeErrors || 0) + 1;
-                    } // if
-                    
-                    iterator.next();
-                    writeNext();
-                }
-            );
+        var doc = JSON.parse(iterator.value().toString());
+        doc._id = iterator.key().toString();
+        
+        couch.saveDoc({ doc: doc }, function(res) {
+            if (res.error) {
+                data.writeErrors = (data.writeErrors || 0) + 1;
+            } // if
+            
+            if (res.debug) {
+                console.log('error writing: ' + doc._id);
+                console.log(doc);
+            } // if
+
+            iterator.next();
+            writeNext();
         });
     } // writeNext
     
-    iterator.seekToFirst();
+    couch.setDebugConfig({
+        debugOnError: true
+    });
     
-    console.log('couchdb: testing writes');
-    writeNext();
+    // delete the db
+    couch.setDB({ db: 'tripplanner' });
+    couch.deleteDB({}, function(res) {
+        couch.createDB({}, function(res) {
+            if (! res.error) {
+                iterator.seekToFirst();
+
+                console.log('couchdb: testing writes');
+                writeNext();
+            } // if
+        });
+    });
 };

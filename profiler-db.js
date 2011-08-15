@@ -85,6 +85,18 @@ function loadFiles(config, callback) {
 
             var content = fs.readFileSync(path.join(config.files, bucket, filename), 'utf8');
             
+            /*
+            // replace troublesome characters
+            content = content
+                .replace(/\u2019|\u2018/g, '\'')
+                .replace(/\u00a9/g, '&copy;')
+                .replace(/\u00b0/g, '&deg;')
+                .replace(/\u00ae/g, '&reg;')
+                .replace(/\ufffd/g, '')
+                .replace(/(ch).teau/ig, '$1ateau')
+            */
+            
+            // update the bucket
             db.put(bucket + '::' + path.basename(filename, '.json'), content);
         });
     });

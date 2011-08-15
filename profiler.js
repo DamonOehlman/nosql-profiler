@@ -14,16 +14,16 @@ var path = require('path'),
             
             couch: {
                 enabled: true,
-                host: 'localhost'
+                host: 'localhost' // 'master-test'
             },
             
             riak: {
-                enabled: true,
+                enabled: false,
                 host: 'localhost'
             },
             
             redis: {
-                enabled: true
+                enabled: false
             },
             
             mongo: {
